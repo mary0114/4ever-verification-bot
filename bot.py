@@ -930,20 +930,30 @@ class AdminRequestView(discord.ui.View):
             print(f"[ERROR] 승인 데이터 저장 실패: {e}")
 
         # 신청자가 본인 스레드에서 제출했다면 승인 결과만 보냅니다.
+        # 참여자가 제출했던 본인 스레드에 승인 완료 임베드를 반드시 전송합니다.
+        # 추천/후기/이벤트는 +1 코인, 초대는 +2 코인입니다.
         result_embed = discord.Embed(
+            title=f"{request['type']} 승인",
             description=(
-                f"**{request['type']}이 승인 되었습니다.**\n"
-                "🪙 코인 지급\n"
+                f"**{request['type']}이 승인 완료되었습니다.**\n\n"
+                "🪙 **코인 지급**\n"
                 f"+{reward} 코인 · 현재 {new_balance} 코인"
             ),
             color=discord.Color.green(),
         )
+        result_embed.set_footer(text=f"신청 ID: {request_id}")
 
-        await send_result_to_participant_thread(
-            interaction.guild,
-            request,
-            result_embed,
-        )
+        participant_thread = get_result_thread(interaction.guild, request)
+        if participant_thread:
+            try:
+                await participant_thread.send(embed=result_embed)
+            except (discord.Forbidden, discord.NotFound, discord.HTTPException) as e:
+                print(f"[WARN] 참여자 스레드 승인 결과 전송 실패: {e}")
+        else:
+            print(
+                f"[WARN] 참여자 스레드를 찾을 수 없습니다. "
+                f"request_id={request_id}, source_thread_id={request.get('source_thread_id')}"
+            )
 
         user = interaction.guild.get_member(int(request["user_id"]))
 
