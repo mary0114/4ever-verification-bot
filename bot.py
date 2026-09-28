@@ -527,7 +527,7 @@ class PurchaseModal(discord.ui.Modal):
         )
         self.product = discord.ui.TextInput(
             label="원하는 제작물",
-            placeholder="예: 프로필 카드",
+            placeholder="예: 캐릭터 배너",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=1000,
