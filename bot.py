@@ -861,26 +861,22 @@ class AdminRequestView(discord.ui.View):
             )
             return
 
-        # Discord 버튼은 약 3초 안에 응답을 받아야 합니다.
-        # 저장이나 다른 작업보다 먼저 ACK를 보내야
-        # "적시에 응답하지 않았어요"가 발생하지 않습니다.
-        await interaction.response.defer()
+        # 중요: 승인 버튼은 여기서 바로 원본 메시지를 수정해 Discord에
+        # interaction 응답을 보냅니다. defer() 후에 긴 작업을 기다리지 않습니다.
+        reward = REWARDS.get(request.get("type"), 0)
+        new_balance = int(data["coins"].get(str(request["user_id"]), 0))
 
+        # 메모리상에서 먼저 승인 처리
         request["status"] = "approved"
         request["processed_at"] = now_kst()
         request["processed_by"] = interaction.user.id
 
-        reward = REWARDS.get(request.get("type"), 0)
         if reward > 0 and not request.get("coins_awarded"):
             new_balance = add_coins(request["user_id"], reward)
             request["coins_awarded"] = reward
             request["coin_balance"] = new_balance
-        else:
-            new_balance = data["coins"].get(str(request["user_id"]), 0)
 
-        # 파일 저장은 이벤트 루프를 막지 않도록 별도 스레드에서 처리합니다.
-        await asyncio.to_thread(save_data)
-
+        # 기존 임베드를 복사해서 승인 상태로 변경하고 사진을 제거합니다.
         embed = interaction.message.embeds[0].copy()
         embed.color = discord.Color.green()
         embed.remove_image()
@@ -895,6 +891,11 @@ class AdminRequestView(discord.ui.View):
                 )
                 break
 
+        # 기존 코인 지급 필드가 중복으로 붙는 것을 방지합니다.
+        for index in range(len(embed.fields) - 1, -1, -1):
+            if embed.fields[index].name == "🪙 코인 지급":
+                embed.remove_field(index)
+
         if reward > 0:
             embed.add_field(
                 name="🪙 코인 지급",
@@ -902,13 +903,33 @@ class AdminRequestView(discord.ui.View):
                 inline=False,
             )
 
-        await interaction.message.edit(
-            embed=embed,
-            view=None,
-            attachments=[],
-        )
+        # ★ 핵심 ★
+        # 이 호출 자체가 Discord interaction에 대한 최초 응답입니다.
+        # 저장/DM/참여자 스레드 전송보다 반드시 먼저 실행합니다.
+        try:
+            await interaction.response.edit_message(
+                embed=embed,
+                view=None,
+                attachments=[],
+            )
+        except Exception as e:
+            print(f"[ERROR] 승인 메시지 즉시 수정 실패: {e}")
+            # 이미 상태를 바꿨지만 메시지 수정이 실패한 경우 저장은 계속합니다.
+            try:
+                await interaction.followup.send(
+                    "⚠️ 승인 처리는 완료됐지만 승인 메시지 수정 중 오류가 발생했습니다.",
+                    ephemeral=True,
+                )
+            except Exception:
+                pass
 
-        # 참여자 본인 스레드에는 승인 결과만 간단하게 보냅니다.
+        # 아래 작업은 interaction 최초 응답 이후에 실행합니다.
+        try:
+            await asyncio.to_thread(save_data)
+        except Exception as e:
+            print(f"[ERROR] 승인 데이터 저장 실패: {e}")
+
+        # 신청자가 본인 스레드에서 제출했다면 승인 결과만 보냅니다.
         result_embed = discord.Embed(
             description=(
                 f"**{request['type']}이 승인 되었습니다.**\n"
@@ -924,9 +945,7 @@ class AdminRequestView(discord.ui.View):
             result_embed,
         )
 
-        user = interaction.guild.get_member(
-            int(request["user_id"])
-        )
+        user = interaction.guild.get_member(int(request["user_id"]))
 
         if user:
             try:
@@ -942,6 +961,8 @@ class AdminRequestView(discord.ui.View):
                     )
             except discord.Forbidden:
                 pass
+            except discord.HTTPException as e:
+                print(f"[WARN] 승인 DM 전송 실패: {e}")
 
     @discord.ui.button(
         label="반려",
