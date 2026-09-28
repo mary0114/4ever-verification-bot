@@ -25,9 +25,17 @@ if not OWNER_ID_RAW:
 OWNER_ID = int(OWNER_ID_RAW)
 GUILD_ID = int(GUILD_ID_RAW) if GUILD_ID_RAW else None
 
-# Railway Volume을 연결했다면 그 경로에 저장합니다.
-DATA_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", ".")
+# =========================================================
+# 영구 데이터 저장
+# =========================================================
+# Railway Volume이 연결되어 있으면 RAILWAY_VOLUME_MOUNT_PATH를 사용합니다.
+# Volume이 없을 경우 /data를 기본 경로로 사용합니다.
+# 중요: Railway에서 반드시 Volume을 서비스에 연결하고 Mount Path를 지정해야
+# 재배포/재시작 후에도 코인 데이터가 유지됩니다.
+DATA_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH") or os.getenv("DATA_DIR", "/data")
 DATA_FILE = os.path.join(DATA_DIR, "verification_data.json")
+
+print(f"[DATA] 저장 경로: {DATA_FILE}")
 
 # 승인/반려를 할 수 있는 역할 ID
 VERIFICATION_ROLE_ID = 1534583787856330842
@@ -73,16 +81,20 @@ def default_data():
 
 def load_data():
     if not os.path.exists(DATA_FILE):
+        print("[DATA] 기존 데이터 파일이 없어 새 데이터 파일을 생성합니다.")
         return default_data()
 
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         if not isinstance(loaded, dict):
-            return default_data()
+            raise ValueError("데이터 파일 형식이 올바르지 않습니다.")
     except Exception as e:
-        print(f"[WARN] 데이터 로드 실패: {e}")
-        return default_data()
+        # 데이터 파일이 깨졌을 때 코인을 초기화해버리지 않도록 합니다.
+        # 봇을 중단시켜 기존 파일을 보존하고, 로그에 원인을 남깁니다.
+        raise RuntimeError(
+            f"verification_data.json을 읽을 수 없습니다. 기존 코인 데이터를 보호하기 위해 봇을 시작하지 않습니다: {e}"
+        ) from e
 
     base = default_data()
     for key in base:
@@ -95,10 +107,12 @@ data = load_data()
 
 
 def save_data_sync():
-    os.makedirs(DATA_DIR or ".", exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
     temp = DATA_FILE + ".tmp"
     with open(temp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(temp, DATA_FILE)
 
 
@@ -527,7 +541,7 @@ class PurchaseModal(discord.ui.Modal):
         )
         self.product = discord.ui.TextInput(
             label="원하는 제작물",
-            placeholder="예: 캐릭터 배너",
+            placeholder="예: 프로필 카드",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=1000,
@@ -913,6 +927,53 @@ async def coins(interaction):
 @bot.tree.command(name="직접구매", description="코인으로 원하는 제작물을 구매 신청합니다.")
 async def direct_purchase(interaction):
     await interaction.response.send_modal(PurchaseModal())
+
+
+@bot.tree.command(name="코인지급", description="멘션한 회원에게 코인을 지급합니다.")
+@app_commands.describe(멘션="코인을 지급할 회원", 갯수="지급할 코인 개수")
+async def give_coins(interaction, 멘션: discord.Member, 갯수: app_commands.Range[int, 1, 100000]):
+    if not can_process_verification(interaction.user):
+        await interaction.response.send_message(
+            "❌ 코인 지급 권한이 없습니다.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    new_balance = add_coin(멘션.id, int(갯수))
+    await save_data()
+    await interaction.followup.send(
+        f"🪙 {멘션.mention}님에게 **+{갯수} 코인**을 지급했습니다.\n"
+        f"현재 보유 코인: **{new_balance}개**",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="코인차감", description="멘션한 회원의 코인을 차감합니다.")
+@app_commands.describe(멘션="코인을 차감할 회원", 갯수="차감할 코인 개수")
+async def take_coins(interaction, 멘션: discord.Member, 갯수: app_commands.Range[int, 1, 100000]):
+    if not can_process_verification(interaction.user):
+        await interaction.response.send_message(
+            "❌ 코인 차감 권한이 없습니다.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    new_balance = subtract_coin(멘션.id, int(갯수))
+    if new_balance is None:
+        await interaction.followup.send(
+            f"❌ {멘션.mention}님의 코인이 부족합니다.\n"
+            f"현재 보유 코인: **{get_coin(멘션.id)}개**\n"
+            f"차감하려는 코인: **{갯수}개**",
+            ephemeral=True,
+        )
+        return
+
+    await save_data()
+    await interaction.followup.send(
+        f"🪙 {멘션.mention}님에게서 **-{갯수} 코인**을 차감했습니다.\n"
+        f"현재 보유 코인: **{new_balance}개**",
+        ephemeral=True,
+    )
 
 
 @bot.tree.command(name="인증설정", description="인증 종류와 스레드를 연결합니다.")
