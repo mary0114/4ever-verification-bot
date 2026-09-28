@@ -874,9 +874,12 @@ class AdminRequestView(discord.ui.View):
 
         save_data()
 
-        embed = interaction.message.embeds[0]
+        # 승인 버튼은 먼저 응답을 확보한 뒤 메시지를 수정합니다.
+        # 이미지가 첨부파일인 경우에도 attachments=[]로 완전히 제거합니다.
+        await interaction.response.defer()
+
+        embed = interaction.message.embeds[0].copy()
         embed.color = discord.Color.green()
-        # 승인 처리 후 관리자 스레드에서는 인증 사진을 제거합니다.
         embed.remove_image()
 
         for index, field in enumerate(embed.fields):
@@ -896,9 +899,10 @@ class AdminRequestView(discord.ui.View):
                 inline=False,
             )
 
-        await interaction.response.edit_message(
+        await interaction.message.edit(
             embed=embed,
             view=None,
+            attachments=[],
         )
 
         # 참여자 본인 스레드에는 승인 결과만 간단하게 보냅니다.
