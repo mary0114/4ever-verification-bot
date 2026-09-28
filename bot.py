@@ -112,6 +112,10 @@ def make_request_id():
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
 
 
+def can_process_verification(user):
+    return isinstance(user, discord.Member) and any(role.id == VERIFICATION_ROLE_ID for role in user.roles)
+
+
 def is_admin(user):
     if user.id == OWNER_ID:
         return True
@@ -273,15 +277,18 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
         )
     else:
         embed = discord.Embed(
-            title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n인증 반려",
             description=(
-                f"**{request_type}이 반려되었습니다.**\n\n"
-                f"❌ **반려 사유**\n{reason}"
+                "**﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒**\n"
+                "[❌](https://discord.com/assets/4f584fe7b12fcf02.svg) 반려\n"
+                "**반려 사유**\n"
+                f": {reason}\n"
+                "**﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒**"
             ),
             color=discord.Color.red(),
         )
 
-    embed.set_footer(text=f"신청 ID: {request.get('request_id', '')}")
+    if approved:
+        embed.set_footer(text=f"신청 ID: {request.get('request_id', '')}")
     try:
         await thread.send(embed=embed)
     except (discord.Forbidden, discord.NotFound, discord.HTTPException) as e:
@@ -629,9 +636,9 @@ class AdminRequestView(discord.ui.View):
         custom_id="verification:admin:approve",
     )
     async def approve(self, interaction, button):
-        if not is_admin(interaction.user):
+        if not can_process_verification(interaction.user):
             await interaction.response.send_message(
-                "❌ 관리자만 처리할 수 있습니다.",
+                "❌ 인증 처리 권한이 없습니다.",
                 ephemeral=True,
             )
             return
@@ -796,8 +803,8 @@ class AdminRequestView(discord.ui.View):
         custom_id="verification:admin:reject",
     )
     async def reject(self, interaction, button):
-        if not is_admin(interaction.user):
-            await interaction.response.send_message("❌ 관리자만 처리할 수 있습니다.", ephemeral=True)
+        if not can_process_verification(interaction.user):
+            await interaction.response.send_message("❌ 인증 처리 권한이 없습니다.", ephemeral=True)
             return
 
         request_id = request_id_from_message(interaction.message)
@@ -871,10 +878,6 @@ bot = VerificationBot()
 
 @bot.tree.command(name="인증패널", description="4ever 인증 패널을 생성합니다.")
 async def verification_panel(interaction):
-    if not is_admin(interaction.user):
-        await interaction.response.send_message("❌ 관리자만 사용할 수 있습니다.", ephemeral=True)
-        return
-
     embed = discord.Embed(
         title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n4ever 인증 접수",
         description=(
