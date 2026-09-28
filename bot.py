@@ -13,25 +13,6 @@ from discord.ext import commands
 # =========================================================
 # 환경변수
 # =========================================================
-
-# 4ever 서버 커스텀 이모지
-EMOJI_RECOMMEND = discord.PartialEmoji(name="4ever_A_034", id=1510522782419648656)
-EMOJI_REVIEW = discord.PartialEmoji(name="4ever_A_035", id=1510522837528481872)
-EMOJI_INVITE = discord.PartialEmoji(name="4ever_A_036", id=1510522847880282236)
-EMOJI_ALT_INVITE = discord.PartialEmoji(name="4ever_A_037", id=1510522868054757407)
-EMOJI_EVENT = discord.PartialEmoji(name="4ever_A_038", id=1510523197425057812)
-EMOJI_COIN = discord.PartialEmoji(name="4ever_A_HNA_056", id=1534859488450969791)
-EMOJI_REJECT = discord.PartialEmoji(name="4ever_A_HNA_055", id=1534859392262864917)
-
-# 메시지 본문용 커스텀 이모지 마크업
-EMOJI_RECOMMEND_TEXT = "<:4ever_A_034:1510522782419648656>"
-EMOJI_REVIEW_TEXT = "<:4ever_A_035:1510522837528481872>"
-EMOJI_INVITE_TEXT = "<:4ever_A_036:1510522847880282236>"
-EMOJI_ALT_INVITE_TEXT = "<:4ever_A_037:1510522868054757407>"
-EMOJI_EVENT_TEXT = "<:4ever_A_038:1510523197425057812>"
-EMOJI_COIN_TEXT = "<:4ever_A_HNA_056:1534859488450969791>"
-EMOJI_REJECT_TEXT = "<:4ever_A_HNA_055:1534859392262864917>"
-
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID_RAW = os.getenv("OWNER_ID", "")
 GUILD_ID_RAW = os.getenv("GUILD_ID", "")
@@ -341,7 +322,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
             description = (
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
                 f"{request.get('user_mention', '<@'+str(request.get('user_id'))+'>')} 자네의 {request_type}이 승인되었다네\n"
-                f"{EMOJI_COIN_TEXT} 코인 사용\n"
+                "<:4ever_A_HNA_056:1534859488450969791> 코인 사용\n"
                 f"-{spent} 코인 · 현재 {balance} 코인\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             )
@@ -349,7 +330,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
             description = (
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
                 f"<@{request.get('user_id')}> 자네의 {request_type}이 승인되었다네\n"
-                f"{EMOJI_COIN_TEXT} 코인 지급\n"
+                "<:4ever_A_HNA_056:1534859488450969791> 코인 지급\n"
                 f"+{reward} 코인 · 현재 {balance} 코인\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             )
@@ -362,7 +343,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
         embed = discord.Embed(
             description=(
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-                f"{EMOJI_REJECT_TEXT} 00인증 반려 사유\n"
+                "<:4ever_A_HNA_055:1534859392262864917> 00인증 반려 사유\n"
                 f": {reason}\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             ),
@@ -932,23 +913,23 @@ class MainVerificationView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="추천 인증", emoji=EMOJI_RECOMMEND, style=discord.ButtonStyle.primary, custom_id="verification:user:recommend", row=0)
+    @discord.ui.button(label="추천 인증", emoji=discord.PartialEmoji(name="4ever_A_034", id=1510522782419648656), style=discord.ButtonStyle.primary, custom_id="verification:user:recommend", row=0)
     async def recommend(self, interaction, button):
         await interaction.response.send_modal(PhotoVerificationModal("추천 인증"))
 
-    @discord.ui.button(label="후기 작성 인증", emoji=EMOJI_REVIEW, style=discord.ButtonStyle.primary, custom_id="verification:user:review", row=0)
+    @discord.ui.button(label="후기 작성 인증", emoji=discord.PartialEmoji(name="4ever_A_035", id=1510522837528481872), style=discord.ButtonStyle.primary, custom_id="verification:user:review", row=0)
     async def review(self, interaction, button):
         await interaction.response.send_modal(PhotoVerificationModal("후기 작성 인증"))
 
-    @discord.ui.button(label="초대 인증", emoji=EMOJI_INVITE, style=discord.ButtonStyle.secondary, custom_id="verification:user:invite", row=1)
+    @discord.ui.button(label="초대 인증", emoji=discord.PartialEmoji(name="4ever_A_036", id=1510522847880282236), style=discord.ButtonStyle.secondary, custom_id="verification:user:invite", row=1)
     async def invite(self, interaction, button):
         await interaction.response.send_modal(InviteNameModal("초대 인증"))
 
-    @discord.ui.button(label="부계정 초대 인증", emoji=EMOJI_ALT_INVITE, style=discord.ButtonStyle.secondary, custom_id="verification:user:altinvite", row=1)
+    @discord.ui.button(label="부계정 초대 인증", emoji=discord.PartialEmoji(name="4ever_A_037", id=1510522868054757407), style=discord.ButtonStyle.secondary, custom_id="verification:user:altinvite", row=1)
     async def alt_invite(self, interaction, button):
         await interaction.response.send_modal(InviteNameModal("부계정 초대 인증"))
 
-    @discord.ui.button(label="이벤트 참여 인증", emoji=EMOJI_EVENT, style=discord.ButtonStyle.secondary, custom_id="verification:user:event", row=2)
+    @discord.ui.button(label="이벤트 참여 인증", emoji=discord.PartialEmoji(name="4ever_A_038", id=1510523197425057812), style=discord.ButtonStyle.secondary, custom_id="verification:user:event", row=2)
     async def event(self, interaction, button):
         await interaction.response.send_modal(PhotoVerificationModal("이벤트 참여 인증"))
 
@@ -983,21 +964,30 @@ bot = VerificationBot()
 
 @bot.tree.command(name="인증패널", description="4ever 인증 패널을 생성합니다.")
 async def verification_panel(interaction):
-    # 임베드가 아닌 일반 메시지로 보내서 커스텀 이모지가
-    # 메시지 본문에서 그대로 렌더링되도록 합니다.
-    panel_text = (
-        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-        "**4ever 인증 접수**\n\n"
-        "아래에서 해당하는 인증을 선택해주세요.\n\n"
-        f"{EMOJI_RECOMMEND_TEXT} **추천 인증** - 사진 필수\n"
-        f"{EMOJI_REVIEW_TEXT} **후기 작성 인증** - 사진 필수\n"
-        f"{EMOJI_INVITE_TEXT} **초대 인증** - 초대한 사람 이름 입력\n"
-        f"{EMOJI_ALT_INVITE_TEXT} **부계정 인증** - 초대한 부계정 이름 입력\n"
-        f"{EMOJI_EVENT_TEXT} **이벤트 참여 인증** - 사진 필수"
+    embed = discord.Embed(
+        title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n4ever 인증 접수",
+        description=(
+            "아래에서 해당하는 인증을 선택해주세요.\n\n"
+            "<:4ever_A_034:1510522782419648656> **추천 인증** - 사진 필수\n"
+            "<:4ever_A_035:1510522837528481872> **후기 작성 인증** - 사진 필수\n"
+            "<:4ever_A_036:1510522847880282236> **초대 인증** - 초대한 사람 이름 입력\n"
+            "<:4ever_A_037:1510522868054757407> **부계정 인증** - 초대한 부계정 이름 입력\n"
+            "<:4ever_A_038:1510523197425057812> **이벤트 참여 인증** - 사진 필수\n\n"
+            "**인증 성공 시**\n"
+            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
+            "@멘션 자네의 00인증이 승인되었다네\n"
+            "<:4ever_A_HNA_056:1534859488450969791> 코인 지급\n"
+            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n\n"
+            "**반려 시**\n"
+            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
+            "<:4ever_A_HNA_055:1534859392262864917> 00인증 반려 사유\n"
+            ": \n"
+            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+        ),
+        color=discord.Color.from_rgb(184, 163, 255),
     )
-
     await interaction.response.defer()
-    await interaction.followup.send(content=panel_text, view=MainVerificationView())
+    await interaction.followup.send(embed=embed, view=MainVerificationView())
 
 
 @bot.tree.command(name="코인", description="현재 보유한 4ever 코인을 확인합니다.")
