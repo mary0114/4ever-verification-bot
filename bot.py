@@ -175,7 +175,7 @@ def request_id_from_message(message):
 def build_request_embed(request_id, request_type, user, fields, status="⏳ 승인 대기", color=None, image_filename=None):
     embed = discord.Embed(
         title=f"﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n{request_type}",
-        description=f"👤 신청자: {user.mention}",
+        description=f"📨 인증 보낸 사람: {user.mention}",
         color=color or discord.Color.from_rgb(184, 163, 255),
     )
     for name, value in fields:
@@ -406,34 +406,26 @@ class PhotoVerificationModal(discord.ui.Modal):
 # =========================================================
 # 초대 인증 - 패널 전용, /초대인증 없음
 # =========================================================
-async def complete_invite(interaction, invited_member):
-    """패널에서 초대한 사람을 멘션으로 제출하면 관리자 초대 인증 스레드에 대기 신청을 보냅니다."""
-    if invited_member.id == interaction.user.id:
+async def complete_invite(interaction, invited_name):
+    """패널에서 초대한 사람의 이름을 입력받아 관리자 초대 인증 스레드에 신청을 보냅니다."""
+    invited_name = invited_name.strip()
+    if not invited_name:
         await interaction.response.send_message(
-            "❌ 본인을 초대한 사람으로 인증할 수 없습니다.",
+            "❌ 초대한 사람 이름을 입력해주세요.",
             ephemeral=True,
         )
         return
 
-    invited_key = str(invited_member.id)
-
-    # 이미 승인된 초대 인증인지 확인
-    if invited_key in data["used_invite_members"]:
-        await interaction.response.send_message(
-            "⚠️ 해당 멤버는 이미 초대 인증에 사용됐어요.",
-            ephemeral=True,
-        )
-        return
-
-    # 아직 처리되지 않은 동일 초대 대상이 있는지도 확인
+    # 같은 이름의 초대 인증이 이미 처리 중인지 확인
+    invited_key = invited_name.casefold()
     for existing in data["requests"].values():
         if (
             existing.get("type") == "초대 인증"
             and existing.get("status") == "pending"
-            and str(existing.get("invited_member_id")) == invited_key
+            and str(existing.get("invited_member_name", "")).casefold() == invited_key
         ):
             await interaction.response.send_message(
-                "⚠️ 해당 멤버의 초대 인증이 이미 관리자 확인을 기다리고 있어요.",
+                "⚠️ 해당 이름의 초대 인증이 이미 관리자 확인을 기다리고 있어요.",
                 ephemeral=True,
             )
             return
@@ -446,13 +438,12 @@ async def complete_invite(interaction, invited_member):
         )
         return
 
-    # 패널에서 제출한 순간 관리자 스레드에는 '승인 대기' 신청으로 들어갑니다.
     request_id = make_request_id()
     request = {
         "request_id": request_id,
         "type": "초대 인증",
         "user_id": interaction.user.id,
-        "invited_member_id": invited_member.id,
+        "invited_member_name": invited_name,
         "status": "pending",
         "created_at": now_kst(),
         "source_thread_id": interaction.channel.id if isinstance(interaction.channel, discord.Thread) else None,
@@ -464,7 +455,7 @@ async def complete_invite(interaction, invited_member):
         "초대 인증",
         interaction.user,
         [
-            ("👤 초대한 사람", invited_member.mention),
+            ("👤 초대한 사람", invited_name),
             ("🪙 승인 시 지급", "+2 코인"),
         ],
     )
@@ -492,91 +483,20 @@ async def complete_invite(interaction, invited_member):
             )
 
 
-class InviteMentionModal(discord.ui.Modal, title="초대 인증"):
+class InviteNameModal(discord.ui.Modal, title="초대 인증"):
     def __init__(self):
         super().__init__()
-        self.invited_person = discord.ui.TextInput(
-            label="초대한 사람",
-            placeholder="초대한 사람을 @멘션해주세요. 예: @마리",
+        self.invited_name = discord.ui.TextInput(
+            label="초대한 사람 이름",
+            placeholder="예: 마리",
             required=True,
+            min_length=1,
             max_length=100,
         )
-        self.add_item(self.invited_person)
+        self.add_item(self.invited_name)
 
     async def on_submit(self, interaction):
-        value = self.invited_person.value.strip()
-        import re
-
-        match = re.fullmatch(r"<@!?(\d+)>", value)
-        if not match:
-            await interaction.response.send_message(
-                "❌ 초대한 사람을 디스코드 멘션으로 입력해주세요.\n예: `@닉네임`",
-                ephemeral=True,
-            )
-            return
-
-        member_id = int(match.group(1))
-        member = interaction.guild.get_member(member_id)
-        if member is None:
-            try:
-                member = await interaction.guild.fetch_member(member_id)
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                member = None
-
-        if member is None:
-            await interaction.response.send_message(
-                "❌ 서버에서 해당 멤버를 찾을 수 없습니다.",
-                ephemeral=True,
-            )
-            return
-
-        await complete_invite(interaction, member)
-
-
-# 초대 인증은 실제 디스코드 멤버 선택창(UserSelect)으로 받습니다.
-# 사용자가 선택한 멤버는 관리자 신청글에서 실제 멘션으로 표시됩니다.
-class InviteMemberSelect(discord.ui.UserSelect):
-    def __init__(self):
-        super().__init__(
-            placeholder="초대한 사람을 선택해주세요",
-            min_values=1,
-            max_values=1,
-            row=0,
-        )
-
-    async def callback(self, interaction):
-        member = self.values[0]
-        await interaction.response.send_message(
-            f"👤 초대한 사람: {member.mention}\n\n"
-            "아래 버튼을 눌러 초대 인증을 제출해주세요.",
-            view=InviteSubmitView(member.id),
-            ephemeral=True,
-        )
-
-
-class InviteMemberSelectView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=120)
-        self.add_item(InviteMemberSelect())
-
-
-class InviteSubmitView(discord.ui.View):
-    def __init__(self, member_id):
-        super().__init__(timeout=120)
-        self.member_id = member_id
-
-    @discord.ui.button(label="제출하기", emoji="📨", style=discord.ButtonStyle.success)
-    async def submit(self, interaction, button):
-        member = interaction.guild.get_member(self.member_id)
-        if member is None:
-            try:
-                member = await interaction.guild.fetch_member(self.member_id)
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                member = None
-        if member is None:
-            await interaction.response.send_message("❌ 해당 멤버를 찾을 수 없습니다.", ephemeral=True)
-            return
-        await complete_invite(interaction, member)
+        await complete_invite(interaction, self.invited_name.value)
 
 
 # =========================================================
@@ -910,11 +830,7 @@ class MainVerificationView(discord.ui.View):
 
     @discord.ui.button(label="초대 인증", emoji="👥", style=discord.ButtonStyle.secondary, custom_id="verification:user:invite", row=1)
     async def invite(self, interaction, button):
-        await interaction.response.send_message(
-            "👥 **초대 인증**\n\n초대한 사람을 아래에서 선택해주세요.",
-            view=InviteMemberSelectView(),
-            ephemeral=True,
-        )
+        await interaction.response.send_modal(InviteNameModal())
 
     @discord.ui.button(label="이벤트 참여 인증", emoji="🎉", style=discord.ButtonStyle.secondary, custom_id="verification:user:event", row=1)
     async def event(self, interaction, button):
@@ -965,7 +881,7 @@ async def verification_panel(interaction):
             "아래에서 해당하는 인증을 선택해주세요.\n\n"
             "📸 **추천 인증** — 사진 필수\n"
             "📝 **후기 작성 인증** — 사진 필수\n"
-            "👥 **초대 인증** — 초대한 사람을 멘션\n"
+            "👥 **초대 인증** — 초대한 사람 이름 입력\n"
             "🎉 **이벤트 참여 인증** — 사진 필수\n"
             "🛒 **구매 인증** — 코인 / 원하는 제작물 입력"
         ),
