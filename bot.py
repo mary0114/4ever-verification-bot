@@ -491,101 +491,144 @@ class TextVerificationModal(discord.ui.Modal):
 
 # =========================================================
 # 초대 인증
-# /초대인증 @새로들어온사람
+# 인증패널에서 버튼을 누른 뒤 초대받은 멤버를 선택해 제출
 # =========================================================
-class InviteVerificationView(discord.ui.View):
-    def __init__(self, inviter_id, invited_member_id):
-        super().__init__(timeout=86400)
-        self.inviter_id = inviter_id
+async def process_invite_verification(interaction, invited_member):
+    if invited_member.id == interaction.user.id:
+        await interaction.response.send_message(
+            "❌ 본인을 초대 멤버로 등록할 수 없습니다.",
+            ephemeral=True,
+        )
+        return
+
+    invited_key = str(invited_member.id)
+    if invited_key in data["used_invite_members"]:
+        await interaction.response.send_message(
+            "⚠️ 해당 멤버는 이미 초대 인증에 사용됐어요.",
+            ephemeral=True,
+        )
+        return
+
+    request_id = make_request_id()
+    reward = REWARDS["초대 인증"]
+    new_balance = add_coins(interaction.user.id, reward)
+
+    data["used_invite_members"][invited_key] = {
+        "inviter_id": interaction.user.id,
+        "request_id": request_id,
+        "created_at": now_kst(),
+    }
+    data["requests"][request_id] = {
+        "type": "초대 인증",
+        "user_id": interaction.user.id,
+        "invited_member_id": invited_member.id,
+        "status": "approved",
+        "created_at": now_kst(),
+        "processed_at": now_kst(),
+        "coins_awarded": reward,
+    }
+
+    embed = make_request_embed(
+        request_id,
+        "초대 인증",
+        interaction.user,
+        [
+            ("👤 초대받은 멤버", invited_member.mention),
+            ("🪙 지급 코인", f"+{reward} 코인"),
+            ("💰 현재 코인", f"{new_balance} 코인"),
+        ],
+        status="✅ 자동 인증 완료",
+    )
+
+    thread = await get_configured_thread(interaction.guild, "초대 인증")
+    if not isinstance(thread, discord.Thread):
+        # 스레드가 없으면 지급/기록을 되돌림
+        data["used_invite_members"].pop(invited_key, None)
+        data["requests"].pop(request_id, None)
+        data["coins"][str(interaction.user.id)] = max(
+            0, int(data["coins"].get(str(interaction.user.id), 0)) - reward
+        )
+        save_data()
+        await interaction.response.send_message(
+            "⚠️ **초대 인증** 스레드가 아직 설정되지 않았어요.\n관리자가 `/인증설정`으로 연결해주세요.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    message = await send_request_to_thread(
+        interaction,
+        request_id,
+        "초대 인증",
+        embed,
+    )
+
+    if message is not None:
+        data["requests"][request_id]["message_id"] = message.id
+        data["requests"][request_id]["thread_id"] = message.channel.id
+
+    save_data()
+
+    await interaction.followup.send(
+        f"✅ 초대 인증이 완료됐어요! **+{reward} 코인** 지급됐습니다.\n현재 보유 코인: **{new_balance}개**",
+        ephemeral=True,
+    )
+
+
+class InviteMemberSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+
+        self.member_select = discord.ui.UserSelect(
+            placeholder="초대받은 멤버를 선택해주세요.",
+            min_values=1,
+            max_values=1,
+            row=0,
+        )
+        self.member_select.callback = self.member_selected
+        self.add_item(self.member_select)
+
+    async def member_selected(self, interaction):
+        member = self.member_select.values[0]
+        if member.id == interaction.user.id:
+            await interaction.response.send_message(
+                "❌ 본인을 초대 멤버로 등록할 수 없습니다.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.edit_message(
+            content=(
+                f"👤 초대자: {interaction.user.mention}\n"
+                f"✨ 초대받은 멤버: {member.mention}\n\n"
+                "위 멤버가 맞다면 **제출하기**를 눌러주세요.\n"
+                "초대 인증 완료 시 **+2 코인**이 자동 지급됩니다."
+            ),
+            view=InviteSubmitView(member.id),
+        )
+
+
+class InviteSubmitView(discord.ui.View):
+    def __init__(self, invited_member_id):
+        super().__init__(timeout=120)
         self.invited_member_id = invited_member_id
 
     @discord.ui.button(
         label="제출하기",
         emoji="📨",
         style=discord.ButtonStyle.success,
-        custom_id="verification:invite:submit_once",
+        custom_id="verification:user:invite_submit",
     )
     async def submit(self, interaction, button):
-        if interaction.user.id != self.inviter_id:
-            await interaction.response.send_message(
-                "❌ 이 초대 인증을 만든 사람만 제출할 수 있어요.",
-                ephemeral=True,
-            )
-            return
-
         invited = interaction.guild.get_member(self.invited_member_id)
         if invited is None:
             await interaction.response.send_message(
-                "❌ 멘션한 멤버가 서버에 없습니다.",
+                "❌ 선택한 멤버가 서버에 없습니다.",
                 ephemeral=True,
             )
             return
 
-        invited_key = str(invited.id)
-        if invited_key in data["used_invite_members"]:
-            await interaction.response.send_message(
-                "⚠️ 해당 멤버는 이미 초대 인증에 사용됐어요.",
-                ephemeral=True,
-            )
-            return
-
-        thread = await get_configured_thread(interaction.guild, "초대 인증")
-        if not isinstance(thread, discord.Thread):
-            await interaction.response.send_message(
-                "⚠️ **초대 인증** 스레드가 아직 설정되지 않았어요.\n관리자가 `/인증설정`으로 연결해주세요.",
-                ephemeral=True,
-            )
-            return
-
-        request_id = make_request_id()
-        reward = REWARDS["초대 인증"]
-        new_balance = add_coins(interaction.user.id, reward)
-
-        data["used_invite_members"][invited_key] = {
-            "inviter_id": interaction.user.id,
-            "request_id": request_id,
-            "created_at": now_kst(),
-        }
-        data["requests"][request_id] = {
-            "type": "초대 인증",
-            "user_id": interaction.user.id,
-            "invited_member_id": invited.id,
-            "status": "approved",
-            "created_at": now_kst(),
-            "processed_at": now_kst(),
-            "coins_awarded": reward,
-        }
-
-        embed = make_request_embed(
-            request_id,
-            "초대 인증",
-            interaction.user,
-            [
-                ("👤 초대받은 멤버", invited.mention),
-                ("🪙 지급 코인", f"+{reward} 코인"),
-                ("💰 현재 코인", f"{new_balance} 코인"),
-            ],
-            status="✅ 자동 인증 완료",
-        )
-
-        await interaction.response.defer(ephemeral=True)
-        message = await send_request_to_thread(
-            interaction,
-            request_id,
-            "초대 인증",
-            embed,
-        )
-
-        if message is not None:
-            data["requests"][request_id]["message_id"] = message.id
-            data["requests"][request_id]["thread_id"] = message.channel.id
-
-        save_data()
-
-        await interaction.followup.send(
-            f"✅ 초대 인증이 완료됐어요! **+{reward} 코인** 지급됐습니다.\n현재 보유 코인: **{new_balance}개**",
-            ephemeral=True,
-        )
+        await process_invite_verification(interaction, invited)
 
 
 # =========================================================
@@ -953,6 +996,20 @@ class MainVerificationView(discord.ui.View):
         )
 
     @discord.ui.button(
+        label="초대 인증",
+        emoji="👥",
+        style=discord.ButtonStyle.secondary,
+        custom_id="verification:user:invite",
+        row=1,
+    )
+    async def invite(self, interaction, button):
+        await interaction.response.send_message(
+            "👥 **초대 인증**\n\n초대받은 멤버를 선택해주세요.",
+            view=InviteMemberSelectView(),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(
         label="이벤트 참여 인증",
         emoji="🎉",
         style=discord.ButtonStyle.secondary,
@@ -1030,7 +1087,7 @@ async def verification_panel(interaction):
             "아래에서 해당하는 인증을 선택해주세요.\n\n"
             "📸 **추천 인증** — 사진 필수\n"
             "📝 **후기 작성 인증** — 사진 필수\n"
-            "👥 **초대 인증** — `/초대인증` 명령어 사용\n"
+            "👥 **초대 인증** — 패널에서 멤버 선택\n"
             "🎉 **이벤트 참여 인증** — 사진 필수\n"
             "🛒 **구매 인증** — 코인 / 원하는 제작물 입력"
         ),
@@ -1040,48 +1097,6 @@ async def verification_panel(interaction):
     await interaction.response.send_message(
         embed=embed,
         view=MainVerificationView(),
-    )
-
-
-# =========================================================
-# /초대인증
-# =========================================================
-@bot.tree.command(
-    name="초대인증",
-    description="새로 들어온 멤버를 멘션해 초대 인증을 제출합니다.",
-)
-@app_commands.describe(
-    멤버="초대를 통해 새로 들어온 멤버",
-)
-async def invite_verification(interaction, 멤버: discord.Member):
-    if 멤버.id == interaction.user.id:
-        await interaction.response.send_message(
-            "❌ 본인을 초대 멤버로 등록할 수 없습니다.",
-            ephemeral=True,
-        )
-        return
-
-    if str(멤버.id) in data["used_invite_members"]:
-        await interaction.response.send_message(
-            "⚠️ 해당 멤버는 이미 초대 인증에 사용됐어요.",
-            ephemeral=True,
-        )
-        return
-
-    embed = discord.Embed(
-        title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n초대 인증",
-        description=(
-            f"👤 초대자: {interaction.user.mention}\n"
-            f"✨ 초대받은 멤버: {멤버.mention}\n\n"
-            "초대받은 멤버가 맞는지 확인한 뒤 **제출하기**를 눌러주세요.\n"
-            "승인 시 **+2 코인**이 자동 지급됩니다."
-        ),
-        color=discord.Color.from_rgb(184, 163, 255),
-    )
-
-    await interaction.response.send_message(
-        embed=embed,
-        view=InviteVerificationView(interaction.user.id, 멤버.id),
     )
 
 
