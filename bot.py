@@ -23,6 +23,15 @@ EMOJI_EVENT = discord.PartialEmoji(name="4ever_A_038", id=1510523197425057812)
 EMOJI_COIN = discord.PartialEmoji(name="4ever_A_HNA_056", id=1534859488450969791)
 EMOJI_REJECT = discord.PartialEmoji(name="4ever_A_HNA_055", id=1534859392262864917)
 
+# 메시지 본문용 커스텀 이모지 마크업
+EMOJI_RECOMMEND_TEXT = "<:4ever_A_034:1510522782419648656>"
+EMOJI_REVIEW_TEXT = "<:4ever_A_035:1510522837528481872>"
+EMOJI_INVITE_TEXT = "<:4ever_A_036:1510522847880282236>"
+EMOJI_ALT_INVITE_TEXT = "<:4ever_A_037:1510522868054757407>"
+EMOJI_EVENT_TEXT = "<:4ever_A_038:1510523197425057812>"
+EMOJI_COIN_TEXT = "<:4ever_A_HNA_056:1534859488450969791>"
+EMOJI_REJECT_TEXT = "<:4ever_A_HNA_055:1534859392262864917>"
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID_RAW = os.getenv("OWNER_ID", "")
 GUILD_ID_RAW = os.getenv("GUILD_ID", "")
@@ -332,7 +341,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
             description = (
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
                 f"{request.get('user_mention', '<@'+str(request.get('user_id'))+'>')} 자네의 {request_type}이 승인되었다네\n"
-                f"{EMOJI_COIN} 코인 사용\n"
+                f"{EMOJI_COIN_TEXT} 코인 사용\n"
                 f"-{spent} 코인 · 현재 {balance} 코인\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             )
@@ -340,7 +349,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
             description = (
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
                 f"<@{request.get('user_id')}> 자네의 {request_type}이 승인되었다네\n"
-                f"{EMOJI_COIN} 코인 지급\n"
+                f"{EMOJI_COIN_TEXT} 코인 지급\n"
                 f"+{reward} 코인 · 현재 {balance} 코인\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             )
@@ -353,7 +362,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
         embed = discord.Embed(
             description=(
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-                f"{EMOJI_REJECT} 00인증 반려 사유\n"
+                f"{EMOJI_REJECT_TEXT} 00인증 반려 사유\n"
                 f": {reason}\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             ),
@@ -980,21 +989,11 @@ async def verification_panel(interaction):
         "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
         "**4ever 인증 접수**\n\n"
         "아래에서 해당하는 인증을 선택해주세요.\n\n"
-        f"{EMOJI_RECOMMEND} **추천 인증** - 사진 필수\n"
-        f"{EMOJI_REVIEW} **후기 작성 인증** - 사진 필수\n"
-        f"{EMOJI_INVITE} **초대 인증** - 초대한 사람 이름 입력\n"
-        f"{EMOJI_ALT_INVITE} **부계정 인증** - 초대한 부계정 이름 입력\n"
-        f"{EMOJI_EVENT} **이벤트 참여 인증** - 사진 필수\n\n"
-        "**인증 성공 시**\n"
-        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-        "@멘션 자네의 00인증이 승인되었다네\n"
-        f"{EMOJI_COIN} 코인 지급\n"
-        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n\n"
-        "**반려 시**\n"
-        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-        f"{EMOJI_REJECT} 00인증 반려 사유\n"
-        ": \n"
-        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+        f"{EMOJI_RECOMMEND_TEXT} **추천 인증** - 사진 필수\n"
+        f"{EMOJI_REVIEW_TEXT} **후기 작성 인증** - 사진 필수\n"
+        f"{EMOJI_INVITE_TEXT} **초대 인증** - 초대한 사람 이름 입력\n"
+        f"{EMOJI_ALT_INVITE_TEXT} **부계정 인증** - 초대한 부계정 이름 입력\n"
+        f"{EMOJI_EVENT_TEXT} **이벤트 참여 인증** - 사진 필수"
     )
 
     await interaction.response.defer()
