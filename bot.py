@@ -1,6 +1,10 @@
 import os
 import json
+import io
 from datetime import datetime, timezone, timedelta
+
+import aiohttp
+from PIL import Image, ImageOps, ImageDraw
 
 import discord
 from discord import app_commands
@@ -156,6 +160,7 @@ def make_request_embed(
     user,
     fields,
     status="⏳ 승인 대기",
+    image_url=None,
 ):
     embed = discord.Embed(
         title=f"﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n{request_type}",
@@ -175,6 +180,9 @@ def make_request_embed(
         value=status,
         inline=False,
     )
+
+    if image_url:
+        embed.set_image(url=image_url)
 
     embed.set_footer(text=f"신청 ID: {request_id}")
 
@@ -245,6 +253,54 @@ async def send_result_to_participant_thread(guild, request, embed, files=None):
 
 
 # =========================================================
+# 사진 2장을 하나의 임베드 이미지로 나란히 합치기
+# =========================================================
+async def make_photo_collage(attachments):
+    if len(attachments) == 1:
+        try:
+            return await attachments[0].to_file(), f"verification_{attachments[0].id}.png"
+        except Exception as e:
+            print(f"[ERROR] 이미지 파일 변환 실패: {e}")
+            return None, None
+
+    try:
+        images = []
+        async with aiohttp.ClientSession() as session:
+            for attachment in attachments[:2]:
+                async with session.get(attachment.url) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(f"이미지 다운로드 실패: HTTP {resp.status}")
+                    raw = await resp.read()
+                image = Image.open(io.BytesIO(raw)).convert("RGB")
+                images.append(image)
+
+        target_height = 700
+        resized = []
+        for image in images:
+            ratio = target_height / image.height
+            width = max(1, int(image.width * ratio))
+            resized.append(image.resize((width, target_height), Image.Resampling.LANCZOS))
+
+        gap = 16
+        canvas = Image.new(
+            "RGB",
+            (resized[0].width + gap + resized[1].width, target_height),
+            "white",
+        )
+        canvas.paste(resized[0], (0, 0))
+        canvas.paste(resized[1], (resized[0].width + gap, 0))
+
+        output = io.BytesIO()
+        canvas.save(output, format="PNG", optimize=True)
+        output.seek(0)
+        filename = "verification_photos.png"
+        return discord.File(output, filename=filename), filename
+    except Exception as e:
+        print(f"[ERROR] 사진 합치기 실패: {e}")
+        return None, None
+
+
+# =========================================================
 # 사진 직접 첨부 모달
 # Discord / discord.py 2.7+
 # =========================================================
@@ -295,12 +351,8 @@ class PhotoVerificationModal(discord.ui.Modal):
                 )
                 return
 
-        uploaded_files = []
-        try:
-            for attachment in attachments:
-                uploaded_files.append(await attachment.to_file())
-        except Exception as e:
-            print(f"[ERROR] 첨부파일 변환 실패: {e}")
+        collage_file, collage_filename = await make_photo_collage(attachments)
+        if collage_file is None:
             await interaction.response.send_message(
                 "❌ 사진을 처리하는 중 오류가 발생했어요. 다시 시도해주세요.",
                 ephemeral=True,
@@ -330,32 +382,18 @@ class PhotoVerificationModal(discord.ui.Modal):
             self.request_type,
             interaction.user,
             [
-                ("📷 인증 사진", "위 첨부파일에서 인증 사진을 확인해주세요."),
+                ("📷 인증 사진", "임베드에서 인증 사진을 확인해주세요."),
             ],
+            image_url=f"attachment://{collage_filename}",
         )
 
-        # 첨부파일을 embed 안의 이미지로 표시합니다.
-        # 사진이 2장이면 두 번째 사진은 별도 embed에 표시됩니다.
-        image_embeds = []
-        if uploaded_files:
-            embed.set_image(url=f"attachment://{uploaded_files[0].filename}")
-
-        if len(uploaded_files) >= 2:
-            second_embed = discord.Embed(
-                color=discord.Color.from_rgb(184, 163, 255),
-            )
-            second_embed.set_image(
-                url=f"attachment://{uploaded_files[1].filename}"
-            )
-            image_embeds.append(second_embed)
-
+        # 두 사진은 하나의 이미지로 합쳐 임베드 안에 나란히 표시합니다.
         message = await send_request_to_thread(
             interaction,
             request_id,
             self.request_type,
             embed,
-            uploaded_files,
-            extra_embeds=image_embeds,
+            [collage_file],
         )
 
         if message is None:
