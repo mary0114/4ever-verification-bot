@@ -750,7 +750,7 @@ class RejectModal(discord.ui.Modal):
         # 신청자가 본인 스레드에서 제출했다면 반려 결과만 그 스레드로 보냅니다.
         result_embed = discord.Embed(
             title=f"﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n{request['type']}",
-            description=f"👤 신청자: <@{request['user_id']}>\n\n❌ **반려**\n\n❌ **반려 사유**\n{reason}",
+            description=f"**{request['type']}** 인증이 반려되었습니다.\n\n❌ **반려 사유**\n{reason}",
             color=discord.Color.red(),
         )
         result_embed.set_footer(text=f"신청 ID: {self.request_id}")
@@ -858,7 +858,7 @@ class AdminRequestView(discord.ui.View):
         # 참여자 본인 스레드에는 승인 결과만 간단하게 보냅니다.
         result_embed = discord.Embed(
             description=(
-                "인증이 승인 완료되었습니다.\n"
+                f"**{request['type']}** 인증이 승인 완료되었습니다.\n"
                 "🪙 코인 지급\n"
                 f"+{reward} 코인 · 현재 {new_balance} 코인"
             ),
