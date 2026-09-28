@@ -745,6 +745,7 @@ class RejectModal(discord.ui.Modal):
         await interaction.response.edit_message(
             embed=embed,
             view=None,
+            attachments=[],
         )
 
         # 신청자가 본인 스레드에서 제출했다면 반려 결과만 그 스레드로 보냅니다.
@@ -832,6 +833,8 @@ class AdminRequestView(discord.ui.View):
 
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
+        # 승인 처리 후 관리자 스레드에서는 인증 사진을 제거합니다.
+        embed.remove_image()
 
         for index, field in enumerate(embed.fields):
             if field.name == "상태":
@@ -858,7 +861,7 @@ class AdminRequestView(discord.ui.View):
         # 참여자 본인 스레드에는 승인 결과만 간단하게 보냅니다.
         result_embed = discord.Embed(
             description=(
-                f"**{request['type']}** 인증이 승인 완료되었습니다.\n"
+                f"**{request['type']}이 승인 되었습니다.**\n"
                 "🪙 코인 지급\n"
                 f"+{reward} 코인 · 현재 {new_balance} 코인"
             ),
