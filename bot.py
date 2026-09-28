@@ -131,6 +131,15 @@ def add_coin(user_id, amount):
     return data["coins"][key]
 
 
+def subtract_coin(user_id, amount):
+    key = str(user_id)
+    balance = get_coin(user_id)
+    if amount < 0 or balance < amount:
+        return None
+    data["coins"][key] = balance - amount
+    return data["coins"][key]
+
+
 async def get_configured_thread(guild, verification_type):
     raw_id = data["threads"].get(verification_type)
     if not raw_id:
@@ -244,11 +253,19 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
 
     request_type = request["type"]
     if approved:
-        description = (
-            f"**{request_type}이 승인되었습니다.**\n\n"
-            f"🪙 **코인 지급**\n"
-            f"+{reward} 코인 · 현재 {balance} 코인"
-        )
+        if request_type == "구매 인증":
+            spent = int(request.get("coins_deducted", request.get("coins", 0)) or 0)
+            description = (
+                f"**{request_type}이 승인되었습니다.**\n\n"
+                f"🪙 **코인 사용**\n"
+                f"-{spent} 코인 · 현재 {balance} 코인"
+            )
+        else:
+            description = (
+                f"**{request_type}이 승인되었습니다.**\n\n"
+                f"🪙 **코인 지급**\n"
+                f"+{reward} 코인 · 현재 {balance} 코인"
+            )
         embed = discord.Embed(
             title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n인증 완료",
             description=description,
@@ -516,18 +533,31 @@ class InviteMentionModal(discord.ui.Modal, title="초대 인증"):
         await complete_invite(interaction, member)
 
 
-# 기존 선택 UI 대신 '초대한 사람 멘션'을 받습니다.
-class InviteSelectView(discord.ui.View):
+# 초대 인증은 실제 디스코드 멤버 선택창(UserSelect)으로 받습니다.
+# 사용자가 선택한 멤버는 관리자 신청글에서 실제 멘션으로 표시됩니다.
+class InviteMemberSelect(discord.ui.UserSelect):
+    def __init__(self):
+        super().__init__(
+            placeholder="초대한 사람을 선택해주세요",
+            min_values=1,
+            max_values=1,
+            row=0,
+        )
+
+    async def callback(self, interaction):
+        member = self.values[0]
+        await interaction.response.send_message(
+            f"👤 초대한 사람: {member.mention}\n\n"
+            "아래 버튼을 눌러 초대 인증을 제출해주세요.",
+            view=InviteSubmitView(member.id),
+            ephemeral=True,
+        )
+
+
+class InviteMemberSelectView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=120)
-
-    @discord.ui.button(
-        label="초대한 사람 멘션하기",
-        emoji="👤",
-        style=discord.ButtonStyle.primary,
-    )
-    async def mention(self, interaction, button):
-        await interaction.response.send_modal(InviteMentionModal())
+        self.add_item(InviteMemberSelect())
 
 
 class InviteSubmitView(discord.ui.View):
@@ -538,6 +568,11 @@ class InviteSubmitView(discord.ui.View):
     @discord.ui.button(label="제출하기", emoji="📨", style=discord.ButtonStyle.success)
     async def submit(self, interaction, button):
         member = interaction.guild.get_member(self.member_id)
+        if member is None:
+            try:
+                member = await interaction.guild.fetch_member(self.member_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                member = None
         if member is None:
             await interaction.response.send_message("❌ 해당 멤버를 찾을 수 없습니다.", ephemeral=True)
             return
@@ -707,6 +742,30 @@ class AdminRequestView(discord.ui.View):
             old_balance = get_coin(request["user_id"])
             new_balance = old_balance
 
+            # 구매 인증은 신청한 코인만큼 승인 시 자동 차감합니다.
+            spend_amount = 0
+            if request.get("type") == "구매 인증":
+                try:
+                    spend_amount = int(str(request.get("coins", "0")).replace(",", "").strip())
+                except ValueError:
+                    await interaction.response.send_message(
+                        "❌ 사용 코인 수가 올바르지 않습니다.",
+                        ephemeral=True,
+                    )
+                    return
+                if spend_amount <= 0:
+                    await interaction.response.send_message(
+                        "❌ 사용 코인은 1개 이상 입력해주세요.",
+                        ephemeral=True,
+                    )
+                    return
+                if old_balance < spend_amount:
+                    await interaction.response.send_message(
+                        f"❌ 코인이 부족합니다.\n현재 코인: **{old_balance}개**\n필요 코인: **{spend_amount}개**",
+                        ephemeral=True,
+                    )
+                    return
+
             request["status"] = "approved"
             request["processed_at"] = now_kst()
             request["processed_by"] = interaction.user.id
@@ -717,6 +776,20 @@ class AdminRequestView(discord.ui.View):
                 request["coin_balance"] = new_balance
             else:
                 new_balance = get_coin(request["user_id"])
+
+            if spend_amount > 0 and not request.get("coins_deducted"):
+                deducted_balance = subtract_coin(request["user_id"], spend_amount)
+                if deducted_balance is None:
+                    # 이론상 위의 잔액 확인으로 발생하지 않지만 안전하게 중단합니다.
+                    request["status"] = "pending"
+                    await interaction.response.send_message(
+                        "❌ 코인 차감 중 문제가 발생했습니다. 승인되지 않았습니다.",
+                        ephemeral=True,
+                    )
+                    return
+                request["coins_deducted"] = spend_amount
+                request["coin_balance_after_spend"] = deducted_balance
+                new_balance = deducted_balance
 
             # 관리자 신청 메시지: 승인 상태로 바꾸고 사진을 완전히 제거합니다.
             if interaction.message.embeds:
@@ -751,7 +824,13 @@ class AdminRequestView(discord.ui.View):
                 if embed.fields[index].name == "🪙 코인 지급":
                     embed.remove_field(index)
 
-            if reward > 0:
+            if spend_amount > 0:
+                embed.add_field(
+                    name="🪙 코인 사용",
+                    value=f"-{spend_amount} 코인 · 현재 {new_balance} 코인",
+                    inline=False,
+                )
+            elif reward > 0:
                 embed.add_field(
                     name="🪙 코인 지급",
                     value=f"+{reward} 코인 · 현재 {new_balance} 코인",
@@ -831,7 +910,11 @@ class MainVerificationView(discord.ui.View):
 
     @discord.ui.button(label="초대 인증", emoji="👥", style=discord.ButtonStyle.secondary, custom_id="verification:user:invite", row=1)
     async def invite(self, interaction, button):
-        await interaction.response.send_modal(InviteMentionModal())
+        await interaction.response.send_message(
+            "👥 **초대 인증**\n\n초대한 사람을 아래에서 선택해주세요.",
+            view=InviteMemberSelectView(),
+            ephemeral=True,
+        )
 
     @discord.ui.button(label="이벤트 참여 인증", emoji="🎉", style=discord.ButtonStyle.secondary, custom_id="verification:user:event", row=1)
     async def event(self, interaction, button):
