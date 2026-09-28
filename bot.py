@@ -890,12 +890,14 @@ async def verification_panel(interaction):
         ),
         color=discord.Color.from_rgb(184, 163, 255),
     )
-    await interaction.response.send_message(embed=embed, view=MainVerificationView())
+    await interaction.response.defer()
+    await interaction.followup.send(embed=embed, view=MainVerificationView())
 
 
 @bot.tree.command(name="코인", description="현재 보유한 4ever 코인을 확인합니다.")
 async def coins(interaction):
-    await interaction.response.send_message(
+    await interaction.response.defer(ephemeral=True)
+    await interaction.followup.send(
         f"🪙 {interaction.user.mention}님의 현재 코인은 **{get_coin(interaction.user.id)}개**예요!",
         ephemeral=True,
     )
