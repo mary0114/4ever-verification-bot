@@ -332,7 +332,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
             description = (
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
                 f"{request.get('user_mention', '<@'+str(request.get('user_id'))+'>')} 자네의 {request_type}이 승인되었다네\n"
-                "<:4ever_A_HNA_056:1534859488450969791> 코인 사용\n"
+                f"{EMOJI_COIN} 코인 사용\n"
                 f"-{spent} 코인 · 현재 {balance} 코인\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             )
@@ -340,7 +340,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
             description = (
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
                 f"<@{request.get('user_id')}> 자네의 {request_type}이 승인되었다네\n"
-                "<:4ever_A_HNA_056:1534859488450969791> 코인 지급\n"
+                f"{EMOJI_COIN} 코인 지급\n"
                 f"+{reward} 코인 · 현재 {balance} 코인\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             )
@@ -353,7 +353,7 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
         embed = discord.Embed(
             description=(
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-                "<:4ever_A_HNA_055:1534859392262864917> 00인증 반려 사유\n"
+                f"{EMOJI_REJECT} 00인증 반려 사유\n"
                 f": {reason}\n"
                 "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
             ),
@@ -974,26 +974,30 @@ bot = VerificationBot()
 
 @bot.tree.command(name="인증패널", description="4ever 인증 패널을 생성합니다.")
 async def verification_panel(interaction):
+    # 커스텀 이모지는 PartialEmoji를 문자열로 변환해서
+    # Discord에 <:name:id> 형식으로 정확히 전달합니다.
+    panel_description = (
+        "아래에서 해당하는 인증을 선택해주세요.\n\n"
+        f"{EMOJI_RECOMMEND} **추천 인증** - 사진 필수\n"
+        f"{EMOJI_REVIEW} **후기 작성 인증** - 사진 필수\n"
+        f"{EMOJI_INVITE} **초대 인증** - 초대한 사람 이름 입력\n"
+        f"{EMOJI_ALT_INVITE} **부계정 인증** - 초대한 부계정 이름 입력\n"
+        f"{EMOJI_EVENT} **이벤트 참여 인증** - 사진 필수\n\n"
+        "**인증 성공 시**\n"
+        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
+        "@멘션 자네의 00인증이 승인되었다네\n"
+        f"{EMOJI_COIN} 코인 지급\n"
+        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n\n"
+        "**반려 시**\n"
+        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
+        f"{EMOJI_REJECT} 00인증 반려 사유\n"
+        ": \n"
+        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+    )
+
     embed = discord.Embed(
         title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n4ever 인증 접수",
-        description=(
-            "아래에서 해당하는 인증을 선택해주세요.\n\n"
-            "<:4ever_A_034:1510522782419648656> **추천 인증** - 사진 필수\n"
-            "<:4ever_A_035:1510522837528481872> **후기 작성 인증** - 사진 필수\n"
-            "<:4ever_A_036:1510522847880282236> **초대 인증** - 초대한 사람 이름 입력\n"
-            "<:4ever_A_037:1510522868054757407> **부계정 인증** - 초대한 부계정 이름 입력\n"
-            "<:4ever_A_038:1510523197425057812> **이벤트 참여 인증** - 사진 필수\n\n"
-            "**인증 성공 시**\n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-            "@멘션 자네의 00인증이 승인되었다네\n"
-            "<:4ever_A_HNA_056:1534859488450969791> 코인 지급\n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n\n"
-            "**반려 시**\n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-            "<:4ever_A_HNA_055:1534859392262864917> 00인증 반려 사유\n"
-            ": \n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
-        ),
+        description=panel_description,
         color=discord.Color.from_rgb(184, 163, 255),
     )
     await interaction.response.defer()
