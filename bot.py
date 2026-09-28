@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 import aiohttp
@@ -860,6 +861,11 @@ class AdminRequestView(discord.ui.View):
             )
             return
 
+        # Discord 버튼은 약 3초 안에 응답을 받아야 합니다.
+        # 저장이나 다른 작업보다 먼저 ACK를 보내야
+        # "적시에 응답하지 않았어요"가 발생하지 않습니다.
+        await interaction.response.defer()
+
         request["status"] = "approved"
         request["processed_at"] = now_kst()
         request["processed_by"] = interaction.user.id
@@ -872,11 +878,8 @@ class AdminRequestView(discord.ui.View):
         else:
             new_balance = data["coins"].get(str(request["user_id"]), 0)
 
-        save_data()
-
-        # 승인 버튼은 먼저 응답을 확보한 뒤 메시지를 수정합니다.
-        # 이미지가 첨부파일인 경우에도 attachments=[]로 완전히 제거합니다.
-        await interaction.response.defer()
+        # 파일 저장은 이벤트 루프를 막지 않도록 별도 스레드에서 처리합니다.
+        await asyncio.to_thread(save_data)
 
         embed = interaction.message.embeds[0].copy()
         embed.color = discord.Color.green()
