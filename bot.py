@@ -974,9 +974,11 @@ bot = VerificationBot()
 
 @bot.tree.command(name="인증패널", description="4ever 인증 패널을 생성합니다.")
 async def verification_panel(interaction):
-    # 커스텀 이모지는 PartialEmoji를 문자열로 변환해서
-    # Discord에 <:name:id> 형식으로 정확히 전달합니다.
-    panel_description = (
+    # 임베드가 아닌 일반 메시지로 보내서 커스텀 이모지가
+    # 메시지 본문에서 그대로 렌더링되도록 합니다.
+    panel_text = (
+        "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
+        "**4ever 인증 접수**\n\n"
         "아래에서 해당하는 인증을 선택해주세요.\n\n"
         f"{EMOJI_RECOMMEND} **추천 인증** - 사진 필수\n"
         f"{EMOJI_REVIEW} **후기 작성 인증** - 사진 필수\n"
@@ -995,13 +997,8 @@ async def verification_panel(interaction):
         "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
     )
 
-    embed = discord.Embed(
-        title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n4ever 인증 접수",
-        description=panel_description,
-        color=discord.Color.from_rgb(184, 163, 255),
-    )
     await interaction.response.defer()
-    await interaction.followup.send(embed=embed, view=MainVerificationView())
+    await interaction.followup.send(content=panel_text, view=MainVerificationView())
 
 
 @bot.tree.command(name="코인", description="현재 보유한 4ever 코인을 확인합니다.")
