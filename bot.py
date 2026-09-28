@@ -76,6 +76,7 @@ def default_data():
         "requests": {},
         "coins": {},
         "used_invite_members": {},
+        "log_channel_id": None,
     }
 
 
@@ -183,6 +184,46 @@ def get_participant_thread(guild, request):
     except (TypeError, ValueError):
         return None
     return channel if isinstance(channel, discord.Thread) else None
+
+
+async def send_log(guild, *, action, admin, request=None, target=None, amount=None, balance=None, reason=None):
+    raw_id = data.get("log_channel_id")
+    if not raw_id:
+        return
+    try:
+        channel = guild.get_channel(int(raw_id))
+    except (TypeError, ValueError):
+        return
+    if channel is None:
+        try:
+            channel = await guild.fetch_channel(int(raw_id))
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException, ValueError):
+            return
+
+    embed = discord.Embed(
+        title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n4ever 활동 로그",
+        color=discord.Color.from_rgb(184, 163, 255),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.add_field(name="관리자", value=admin.mention, inline=False)
+    embed.add_field(name="내용", value=action, inline=False)
+    if request:
+        embed.add_field(name="인증 보낸 사람", value=f"<@{request.get('user_id')}>", inline=True)
+        embed.add_field(name="인증 종류", value=str(request.get("type", "-")), inline=True)
+        embed.add_field(name="신청 ID", value=str(request.get("request_id", "-")), inline=False)
+    if target is not None:
+        embed.add_field(name="대상", value=target.mention, inline=True)
+    if amount is not None:
+        prefix = "+" if amount > 0 else ""
+        embed.add_field(name="코인 변동", value=f"{prefix}{amount} 코인", inline=True)
+    if balance is not None:
+        embed.add_field(name="처리 후 보유 코인", value=f"{balance} 코인", inline=True)
+    if reason:
+        embed.add_field(name="반려 사유", value=reason, inline=False)
+    try:
+        await channel.send(embed=embed)
+    except (discord.Forbidden, discord.NotFound, discord.HTTPException) as e:
+        print(f"[WARN] 로그 전송 실패: {e}")
 
 
 def request_id_from_message(message):
@@ -641,6 +682,13 @@ class RejectModal(discord.ui.Modal):
             await save_data()
             await send_participant_result(interaction.guild, request, approved=False, reason=reason)
             await send_user_dm(interaction.guild, request, approved=False, reason=reason)
+            await send_log(
+                interaction.guild,
+                action="❌ 인증 반려",
+                admin=interaction.user,
+                request=request,
+                reason=reason,
+            )
 
 
 # =========================================================
@@ -817,6 +865,20 @@ class AdminRequestView(discord.ui.View):
                 balance=new_balance,
             )
 
+            coin_change = 0
+            if spend_amount > 0:
+                coin_change = -spend_amount
+            elif reward > 0:
+                coin_change = reward
+            await send_log(
+                interaction.guild,
+                action="✅ 인증 승인",
+                admin=interaction.user,
+                request=request,
+                amount=coin_change if coin_change else None,
+                balance=new_balance,
+            )
+
     @discord.ui.button(
         label="반려",
         emoji="❌",
@@ -946,6 +1008,14 @@ async def give_coins(interaction, 멘션: discord.Member, 갯수: app_commands.R
         f"현재 보유 코인: **{new_balance}개**",
         ephemeral=True,
     )
+    await send_log(
+        interaction.guild,
+        action="🪙 코인 지급",
+        admin=interaction.user,
+        target=멘션,
+        amount=int(갯수),
+        balance=new_balance,
+    )
 
 
 @bot.tree.command(name="코인차감", description="멘션한 회원의 코인을 차감합니다.")
@@ -972,6 +1042,28 @@ async def take_coins(interaction, 멘션: discord.Member, 갯수: app_commands.R
     await interaction.followup.send(
         f"🪙 {멘션.mention}님에게서 **-{갯수} 코인**을 차감했습니다.\n"
         f"현재 보유 코인: **{new_balance}개**",
+        ephemeral=True,
+    )
+    await send_log(
+        interaction.guild,
+        action="🪙 코인 차감",
+        admin=interaction.user,
+        target=멘션,
+        amount=-int(갯수),
+        balance=new_balance,
+    )
+
+
+@bot.tree.command(name="로그설정", description="4ever 활동 로그를 보낼 채널을 설정합니다.")
+@app_commands.describe(채널="활동 로그를 보낼 텍스트 채널")
+async def set_log_channel(interaction, 채널: discord.TextChannel):
+    if interaction.user.id != OWNER_ID and not is_admin(interaction.user):
+        await interaction.response.send_message("❌ 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+    data["log_channel_id"] = str(채널.id)
+    await save_data()
+    await interaction.response.send_message(
+        f"✅ 활동 로그 채널을 {채널.mention}으로 설정했습니다.",
         ephemeral=True,
     )
 
