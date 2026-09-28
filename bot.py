@@ -258,7 +258,14 @@ async def send_result_to_participant_thread(guild, request, embed, files=None):
 async def make_photo_collage(attachments):
     if len(attachments) == 1:
         try:
-            return await attachments[0].to_file(), f"verification_{attachments[0].id}.png"
+            # attachment:// URL과 실제 업로드 파일명이 반드시 같아야
+            # 이미지가 임베드 안에서 렌더링됩니다.
+            file = await attachments[0].to_file()
+            original_name = getattr(file, "filename", "image.png") or "image.png"
+            ext = os.path.splitext(original_name)[1] or ".png"
+            filename = f"verification_{attachments[0].id}{ext}"
+            file.filename = filename
+            return file, filename
         except Exception as e:
             print(f"[ERROR] 이미지 파일 변환 실패: {e}")
             return None, None
