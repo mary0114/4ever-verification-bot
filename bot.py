@@ -29,6 +29,9 @@ GUILD_ID = int(GUILD_ID_RAW) if GUILD_ID_RAW else None
 DATA_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", ".")
 DATA_FILE = os.path.join(DATA_DIR, "verification_data.json")
 
+# 승인/반려를 할 수 있는 역할 ID
+VERIFICATION_ROLE_ID = 1534583787856330842
+
 VERIFICATION_TYPES = [
     "추천 인증",
     "후기 작성 인증",
