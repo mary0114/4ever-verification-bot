@@ -320,19 +320,15 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
         if request_type == "구매 인증":
             spent = int(request.get("coins_deducted", request.get("coins", 0)) or 0)
             description = (
-                "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-                f"{request.get('user_mention', '<@'+str(request.get('user_id'))+'>')} 자네의 {request_type}이 승인되었다네\n"
-                "<:4ever_A_HNA_056:1534859488450969791> 코인 사용\n"
-                f"-{spent} 코인 · 현재 {balance} 코인\n"
-                "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+                f"**{request_type}이 승인되었습니다.**\n\n"
+                f"🪙 **코인 사용**\n"
+                f"-{spent} 코인 · 현재 {balance} 코인"
             )
         else:
             description = (
-                "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-                f"<@{request.get('user_id')}> 자네의 {request_type}이 승인되었다네\n"
-                "<:4ever_A_HNA_056:1534859488450969791> 코인 지급\n"
-                f"+{reward} 코인 · 현재 {balance} 코인\n"
-                "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+                f"**{request_type}이 승인되었습니다.**\n\n"
+                f"🪙 **코인 지급**\n"
+                f"+{reward} 코인 · 현재 {balance} 코인"
             )
         embed = discord.Embed(
             title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n인증 완료",
@@ -342,10 +338,11 @@ async def send_participant_result(guild, request, *, approved, reward=0, balance
     else:
         embed = discord.Embed(
             description=(
-                "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-                "<:4ever_A_HNA_055:1534859392262864917> 00인증 반려 사유\n"
+                "**﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒**\n"
+                "[❌](https://discord.com/assets/4f584fe7b12fcf02.svg) 반려\n"
+                "**반려 사유**\n"
                 f": {reason}\n"
-                "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+                "**﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒**"
             ),
             color=discord.Color.red(),
         )
@@ -968,21 +965,11 @@ async def verification_panel(interaction):
         title="﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n4ever 인증 접수",
         description=(
             "아래에서 해당하는 인증을 선택해주세요.\n\n"
-            "<:4ever_A_034:1510522782419648656> **추천 인증** - 사진 필수\n"
-            "<:4ever_A_035:1510522837528481872> **후기 작성 인증** - 사진 필수\n"
-            "<:4ever_A_036:1510522847880282236> **초대 인증** - 초대한 사람 이름 입력\n"
-            "<:4ever_A_037:1510522868054757407> **부계정 인증** - 초대한 부계정 이름 입력\n"
-            "<:4ever_A_038:1510523197425057812> **이벤트 참여 인증** - 사진 필수\n\n"
-            "**인증 성공 시**\n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-            "@멘션 자네의 00인증이 승인되었다네\n"
-            "<:4ever_A_HNA_056:1534859488450969791> 코인 지급\n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n\n"
-            "**반려 시**\n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n"
-            "<:4ever_A_HNA_055:1534859392262864917> 00인증 반려 사유\n"
-            ": \n"
-            "﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒"
+            "📸 **추천 인증** — 사진 필수\n"
+            "📝 **후기 작성 인증** — 사진 필수\n"
+            "👥 **초대 인증** — 초대한 사람 이름 입력\n"
+            "👤 **부계정 초대 인증** — 초대한 부계정 이름 입력\n"
+            "🎉 **이벤트 참여 인증** — 사진 필수"
         ),
         color=discord.Color.from_rgb(184, 163, 255),
     )
