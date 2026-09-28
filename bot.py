@@ -187,7 +187,11 @@ async def send_request_to_thread(
     request_type,
     embed,
     files=None,
+    extra_embeds=None,
 ):
+    # 인증 신청 자체는 항상 관리자용으로 설정한 인증 스레드에 보냅니다.
+    # 단, 참여자가 인증을 제출한 곳이 자기 스레드라면 그 스레드 ID를
+    # request 데이터에 별도로 저장해서 승인/반려 결과만 그곳으로 보냅니다.
     thread = await get_configured_thread(
         interaction.guild,
         request_type,
@@ -201,13 +205,43 @@ async def send_request_to_thread(
         )
         return None
 
+    embeds = [embed]
+    if extra_embeds:
+        embeds.extend(extra_embeds)
+
     message = await thread.send(
-        embed=embed,
+        embeds=embeds,
         files=files or [],
         view=AdminRequestView(),
     )
 
     return message
+
+
+def get_result_thread(guild, request):
+    # 참여자가 자기 스레드에서 인증을 제출한 경우
+    # 승인/반려 결과를 그 스레드로 보냅니다.
+    source_thread_id = request.get("source_thread_id")
+    if not source_thread_id:
+        return None
+
+    channel = guild.get_channel_or_thread(int(source_thread_id))
+    return channel if isinstance(channel, discord.Thread) else None
+
+
+async def send_result_to_participant_thread(guild, request, embed, files=None):
+    thread = get_result_thread(guild, request)
+    if not thread:
+        return None
+
+    try:
+        return await thread.send(
+            embed=embed,
+            files=files or [],
+        )
+    except (discord.Forbidden, discord.NotFound, discord.HTTPException) as e:
+        print(f"[WARN] 참여자 스레드 결과 전송 실패: {e}")
+        return None
 
 
 # =========================================================
@@ -223,44 +257,48 @@ class PhotoVerificationModal(discord.ui.Modal):
         self.file_upload = discord.ui.FileUpload(
             custom_id=f"verification:{request_type}:file",
             min_values=1,
-            max_values=1,
+            max_values=2,
             required=True,
         )
 
         self.add_item(
             discord.ui.Label(
                 text="인증 사진",
-                description="인증 완료 화면을 캡처해서 첨부해주세요.",
+                description="인증에 필요한 사진을 최대 2장까지 첨부해주세요.",
                 component=self.file_upload,
             )
         )
 
     async def on_submit(self, interaction):
-        attachments = self.file_upload.values
+        attachments = list(self.file_upload.values or [])
 
         if not attachments:
             await interaction.response.send_message(
-                "❌ 인증 사진을 첨부해주세요.",
+                "❌ 인증 사진을 1장 이상 첨부해주세요.",
                 ephemeral=True,
             )
             return
 
-        attachment = attachments[0]
-
-        # 사진만 허용
-        content_type = attachment.content_type or ""
-        if not content_type.startswith("image/"):
+        if len(attachments) > 2:
             await interaction.response.send_message(
-                "❌ 이미지 파일만 첨부할 수 있어요.",
+                "❌ 인증 사진은 최대 2장까지 첨부할 수 있어요.",
                 ephemeral=True,
             )
             return
 
-        request_id = make_request_id()
+        for attachment in attachments:
+            content_type = attachment.content_type or ""
+            if not content_type.startswith("image/"):
+                await interaction.response.send_message(
+                    "❌ 인증 사진은 이미지 파일만 첨부할 수 있어요.",
+                    ephemeral=True,
+                )
+                return
 
-        # Discord 첨부파일은 interaction에서 받은 뒤 to_file()로 다시 전송
+        uploaded_files = []
         try:
-            uploaded_file = await attachment.to_file()
+            for attachment in attachments:
+                uploaded_files.append(await attachment.to_file())
         except Exception as e:
             print(f"[ERROR] 첨부파일 변환 실패: {e}")
             await interaction.response.send_message(
@@ -269,13 +307,20 @@ class PhotoVerificationModal(discord.ui.Modal):
             )
             return
 
+        request_id = make_request_id()
+
         data["requests"][request_id] = {
             "type": self.request_type,
             "user_id": interaction.user.id,
             "status": "pending",
             "created_at": now_kst(),
-            "filename": attachment.filename,
-            "attachment_url": attachment.url,
+            "filenames": [a.filename for a in attachments],
+            "attachment_urls": [a.url for a in attachments],
+            "source_thread_id": (
+                interaction.channel.id
+                if isinstance(interaction.channel, discord.Thread)
+                else None
+            ),
         }
 
         await interaction.response.defer(ephemeral=True)
@@ -285,16 +330,32 @@ class PhotoVerificationModal(discord.ui.Modal):
             self.request_type,
             interaction.user,
             [
-                ("📷 인증 사진", "아래 첨부파일을 확인해주세요."),
+                ("📷 인증 사진", "위 첨부파일에서 인증 사진을 확인해주세요."),
             ],
         )
+
+        # 첨부파일을 embed 안의 이미지로 표시합니다.
+        # 사진이 2장이면 두 번째 사진은 별도 embed에 표시됩니다.
+        image_embeds = []
+        if uploaded_files:
+            embed.set_image(url=f"attachment://{uploaded_files[0].filename}")
+
+        if len(uploaded_files) >= 2:
+            second_embed = discord.Embed(
+                color=discord.Color.from_rgb(184, 163, 255),
+            )
+            second_embed.set_image(
+                url=f"attachment://{uploaded_files[1].filename}"
+            )
+            image_embeds.append(second_embed)
 
         message = await send_request_to_thread(
             interaction,
             request_id,
             self.request_type,
             embed,
-            [uploaded_file],
+            uploaded_files,
+            extra_embeds=image_embeds,
         )
 
         if message is None:
@@ -343,6 +404,11 @@ class TextVerificationModal(discord.ui.Modal):
             "status": "pending",
             "created_at": now_kst(),
             "content": self.content.value,
+            "source_thread_id": (
+                interaction.channel.id
+                if isinstance(interaction.channel, discord.Thread)
+                else None
+            ),
         }
 
         await interaction.response.defer(ephemeral=True)
@@ -517,6 +583,11 @@ class PurchaseModal(discord.ui.Modal):
             "created_at": now_kst(),
             "coins": coins,
             "product": product,
+            "source_thread_id": (
+                interaction.channel.id
+                if isinstance(interaction.channel, discord.Thread)
+                else None
+            ),
         }
 
         await interaction.response.defer(ephemeral=True)
@@ -631,6 +702,19 @@ class RejectModal(discord.ui.Modal):
             view=None,
         )
 
+        # 신청자가 본인 스레드에서 제출했다면 반려 결과만 그 스레드로 보냅니다.
+        result_embed = discord.Embed(
+            title=f"﹒︶︶﹒︶︶୨୧︶︶﹒︶︶﹒\n{request['type']}",
+            description=f"👤 신청자: <@{request['user_id']}>\n\n❌ **반려**\n\n❌ **반려 사유**\n{reason}",
+            color=discord.Color.red(),
+        )
+        result_embed.set_footer(text=f"신청 ID: {self.request_id}")
+        await send_result_to_participant_thread(
+            interaction.guild,
+            request,
+            result_embed,
+        )
+
         user = interaction.guild.get_member(
             int(request["user_id"])
         )
@@ -724,6 +808,22 @@ class AdminRequestView(discord.ui.View):
         await interaction.response.edit_message(
             embed=embed,
             view=None,
+        )
+
+        # 참여자 본인 스레드에는 승인 결과만 간단하게 보냅니다.
+        result_embed = discord.Embed(
+            description=(
+                "인증이 승인 완료되었습니다.\n"
+                "🪙 코인 지급\n"
+                f"+{reward} 코인 · 현재 {new_balance} 코인"
+            ),
+            color=discord.Color.green(),
+        )
+
+        await send_result_to_participant_thread(
+            interaction.guild,
+            request,
+            result_embed,
         )
 
         user = interaction.guild.get_member(
@@ -941,7 +1041,7 @@ async def invite_verification(interaction, 멤버: discord.Member):
 # /내코인
 # =========================================================
 @bot.tree.command(
-    name="내코인",
+    name="코인",
     description="현재 보유한 4ever 코인을 확인합니다.",
 )
 async def my_coins(interaction):
