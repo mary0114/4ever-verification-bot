@@ -555,7 +555,8 @@ class PurchaseModal(discord.ui.Modal):
             "구매 인증",
             interaction.user,
             [
-                ("🪙 코인 갯수", request["coins"]),
+                ("🪙 현재 보유 코인", f"{get_coin(interaction.user.id)}개"),
+                ("🪙 코인 사용", request["coins"]),
                 ("🎨 원하는 제작물", request["product"]),
             ],
         )
