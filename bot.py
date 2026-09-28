@@ -700,7 +700,7 @@ class AdminRequestView(discord.ui.View):
 
     @discord.ui.button(
         label="승인",
-        emoji="✅",
+        emoji=discord.PartialEmoji(name="4ever_A_HNA_056", id=1534859488450969791),
         style=discord.ButtonStyle.success,
         custom_id="verification:admin:approve",
     )
@@ -881,7 +881,7 @@ class AdminRequestView(discord.ui.View):
 
     @discord.ui.button(
         label="반려",
-        emoji="❌",
+        emoji=discord.PartialEmoji(name="4ever_A_HNA_055", id=1534859392262864917),
         style=discord.ButtonStyle.danger,
         custom_id="verification:admin:reject",
     )
