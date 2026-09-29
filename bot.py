@@ -23,7 +23,9 @@ if not OWNER_ID_RAW:
     raise RuntimeError("OWNER_ID 환경변수가 설정되지 않았습니다.")
 
 OWNER_ID = int(OWNER_ID_RAW)
-GUILD_ID = int(GUILD_ID_RAW) if GUILD_ID_RAW else None
+
+# 사용할 서버 ID
+GUILD_ID = 1490713244715978843
 
 # =========================================================
 # 영구 데이터 저장
@@ -37,8 +39,12 @@ DATA_FILE = os.path.join(DATA_DIR, "verification_data.json")
 
 print(f"[DATA] 저장 경로: {DATA_FILE}")
 
-# 승인/반려를 할 수 있는 역할 ID
-VERIFICATION_ROLE_ID = 1534583787856330842
+# 인증 승인/반려 및 코인 관리가 가능한 관리자 사용자 ID
+VERIFICATION_ADMIN_IDS = {
+    1492602271161126992,
+    1491742753342886028,
+    1492585581891555461,
+}
 
 VERIFICATION_TYPES = [
     "추천 인증",
@@ -133,7 +139,7 @@ def make_request_id():
 
 
 def can_process_verification(user):
-    return isinstance(user, discord.Member) and any(role.id == VERIFICATION_ROLE_ID for role in user.roles)
+    return user.id in VERIFICATION_ADMIN_IDS
 
 
 def is_admin(user):
