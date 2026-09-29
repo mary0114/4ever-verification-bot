@@ -23,9 +23,7 @@ if not OWNER_ID_RAW:
     raise RuntimeError("OWNER_ID 환경변수가 설정되지 않았습니다.")
 
 OWNER_ID = int(OWNER_ID_RAW)
-
-# 사용할 서버 ID
-GUILD_ID = 1490713244715978843
+GUILD_ID = int(GUILD_ID_RAW) if GUILD_ID_RAW else None
 
 # =========================================================
 # 영구 데이터 저장
@@ -39,12 +37,8 @@ DATA_FILE = os.path.join(DATA_DIR, "verification_data.json")
 
 print(f"[DATA] 저장 경로: {DATA_FILE}")
 
-# 인증 승인/반려 및 코인 관리가 가능한 관리자 사용자 ID
-VERIFICATION_ADMIN_IDS = {
-    1492602271161126992,
-    1491742753342886028,
-    1492585581891555461,
-}
+# 승인/반려를 할 수 있는 역할 ID
+VERIFICATION_ROLE_ID = 1534583787856330842
 
 VERIFICATION_TYPES = [
     "추천 인증",
@@ -139,7 +133,7 @@ def make_request_id():
 
 
 def can_process_verification(user):
-    return user.id in VERIFICATION_ADMIN_IDS
+    return isinstance(user, discord.Member) and any(role.id == VERIFICATION_ROLE_ID for role in user.roles)
 
 
 def is_admin(user):
@@ -409,6 +403,14 @@ class PhotoVerificationModal(discord.ui.Modal):
         attachments = list(self.file_upload.values or [])
         if not attachments:
             await interaction.response.send_message("❌ 사진을 1장 이상 첨부해주세요.", ephemeral=True)
+            return
+
+        # 추천 인증은 사진 2장을 모두 첨부해야 접수/승인이 가능합니다.
+        if self.request_type == "추천 인증" and len(attachments) != 2:
+            await interaction.response.send_message(
+                "❌ 추천 인증은 인증 사진 2장을 모두 첨부해야 합니다.",
+                ephemeral=True,
+            )
             return
 
         for attachment in attachments[:2]:
