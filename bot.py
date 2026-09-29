@@ -37,17 +37,12 @@ DATA_FILE = os.path.join(DATA_DIR, "verification_data.json")
 
 print(f"[DATA] 저장 경로: {DATA_FILE}")
 
-# 인증 승인/반려 및 코인 관리가 가능한 관리자 사용자 ID
+# 인증 승인/반려 및 코인 관리가 가능한 역할 ID
 VERIFICATION_ADMIN_ROLE_IDS = {
     1492602271161126992,
     1491742753342886028,
     1492585581891555461,
 }
-
-def can_process_verification(user):
-    return isinstance(user, discord.Member) and any(
-        role.id in VERIFICATION_ADMIN_ROLE_IDS for role in user.roles
-    )
 
 VERIFICATION_TYPES = [
     "추천 인증",
@@ -142,7 +137,9 @@ def make_request_id():
 
 
 def can_process_verification(user):
-    return user.id in VERIFICATION_ADMIN_IDS
+    return isinstance(user, discord.Member) and any(
+        role.id in VERIFICATION_ADMIN_ROLE_IDS for role in user.roles
+    )
 
 
 def is_admin(user):
