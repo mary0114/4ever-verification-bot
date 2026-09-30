@@ -1000,6 +1000,70 @@ async def coins(interaction):
     )
 
 
+@bot.tree.command(name="전체코인", description="상점 이용자들의 현재 보유 코인을 확인합니다.")
+async def all_coins(interaction):
+    # 인증 관리자 역할을 가진 사람만 확인할 수 있습니다.
+    if not can_process_verification(interaction.user):
+        await interaction.response.send_message(
+            "❌ 관리자만 사용할 수 있습니다.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    # 코인 데이터가 기록된 상점 이용자만 표시하며, 현재 잔액 기준으로 정렬합니다.
+    users = []
+    for user_id_raw, balance_raw in data.get("coins", {}).items():
+        try:
+            user_id = int(user_id_raw)
+            balance = int(balance_raw)
+        except (TypeError, ValueError):
+            continue
+
+        member = interaction.guild.get_member(user_id)
+        if member is not None:
+            name = member.display_name
+            mention = member.mention
+        else:
+            name = f"사용자 {user_id}"
+            mention = f"<@{user_id}>"
+
+        users.append((balance, name.casefold(), mention, name))
+
+    users.sort(key=lambda item: (-item[0], item[1]))
+
+    if not users:
+        await interaction.followup.send(
+            "🪙 아직 코인을 보유하거나 사용한 상점 이용자가 없습니다.",
+            ephemeral=True,
+        )
+        return
+
+    lines = [
+        f"{idx}. {mention} — **{balance}개**"
+        for idx, (balance, _, mention, _) in enumerate(users, start=1)
+    ]
+
+    # Discord 메시지 길이 제한을 피하기 위해 여러 메시지로 나눕니다.
+    chunks = []
+    current = ""
+    for line in lines:
+        if current and len(current) + len(line) + 1 > 1900:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        chunks.append(current)
+
+    await interaction.followup.send(
+        f"🪙 **4ever 전체 코인 현황**\n총 **{len(users)}명**\n\n{chunks[0]}",
+        ephemeral=True,
+    )
+    for chunk in chunks[1:]:
+        await interaction.followup.send(chunk, ephemeral=True)
+
+
 @bot.tree.command(name="직접구매", description="코인으로 원하는 제작물을 구매 신청합니다.")
 async def direct_purchase(interaction):
     await interaction.response.send_modal(PurchaseModal())
